@@ -76,15 +76,19 @@ def text_to_speech(text):
 def speech_to_text():
     recognizer = sr.Recognizer()
     with sr.Microphone() as source:
-        st.write("Listening...")
-        audio = recognizer.listen(source)
+        st.write("🎤 Listening... please speak now.")
+        recognizer.adjust_for_ambient_noise(source, duration=0.5)
         try:
+            audio = recognizer.listen(source, timeout=5, phrase_time_limit=7)
             text = recognizer.recognize_google(audio)
             return text
+        except sr.WaitTimeoutError:
+            return "⏱️ Listening timed out. Please try again."
         except sr.UnknownValueError:
-            return "Sorry, I couldn't understand the audio."
+            return "😕 Sorry, I couldn't understand your speech."
         except sr.RequestError:
-            return "Speech recognition service unavailable."
+            return "❌ Speech service is unreachable. Please check your internet."
+
 
 # Streamlit app
 st.title("Information Retrieval System")
@@ -96,9 +100,20 @@ query = ""
 if input_method == "Text":
     query = st.text_input("Enter your query (e.g., 'What is AI?')")
 else:
-    if st.button("Record Speech"):
-        query = speech_to_text()
-        st.write(f"You said: {query}")
+    spoken_text = ""
+    if st.button("🎙️ Record Speech"):
+        spoken_text = speech_to_text()
+        st.write("🗣️ You said:", spoken_text)
+    
+    if spoken_text and not spoken_text.startswith(("⏱️", "😕", "❌")):
+        query = spoken_text
+    elif spoken_text:
+        st.warning("Speech input failed. Please try again.")
+        if st.button("🔁 Try Again"):
+            spoken_text = speech_to_text()
+            st.write("🗣️ You said:", spoken_text)
+            if not spoken_text.startswith(("⏱️", "😕", "❌")):
+                query = spoken_text
 
 # Process query and display results
 if query and st.button("Get Answer"):
