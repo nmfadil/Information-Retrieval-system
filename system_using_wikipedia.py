@@ -69,9 +69,10 @@ def fetch_image(query):
     
 def text_to_speech(text):
     tts = gTTS(text=text, lang='en')
-    audio_file = "output.mp3"
-    tts.save(audio_file)
-    return audio_file
+    mp3_fp = io.BytesIO()
+    tts.write_to_fp(mp3_fp)
+    mp3_fp.seek(0)
+    return mp3_fp
 
 def speech_to_text():
     recognizer = sr.Recognizer()
@@ -128,10 +129,12 @@ if query and st.button("Get Answer"):
         st.write("Answer:", answer)
         
         # Generate and display audio with controls
-        audio_file = text_to_speech(answer)
-        audio_bytes = open(audio_file, "rb").read()
-        st.audio(audio_bytes, format="audio/mp3")
-        os.remove(audio_file)  # Clean up
+        # audio_file = text_to_speech(answer)
+        # audio_bytes = open(audio_file, "rb").read()
+        # st.audio(audio_bytes, format="audio/mp3")
+        # os.remove(audio_file)  # Clean up
+        audio_bytes = text_to_speech(answer)
+        st.audio(audio_bytes, format='audio/mp3')
         
         # Display image
         if image_url:
