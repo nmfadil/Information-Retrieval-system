@@ -9,18 +9,18 @@ import speech_recognition as sr
 import wikipedia
 import re
 
-from dotenv import load_dotenv
+# from dotenv import load_dotenv
 
-# Load API key securely
-load_dotenv()
-api_key = os.getenv("CS_API_KEY")
-if not api_key:
-    st.error("Custom Search Api key not found! Please set it in a .env file.")
-    st.stop()
-cse_id = os.getenv("CSE_ID")
-if not cse_id:
-    st.error("Custom Search Engine ID not found! Please set it in a .env file.")
-    st.stop()
+# # Load API key securely
+# load_dotenv()
+api_key = st.secrets["CS_API_KEY"]
+# if not api_key:
+#     st.error("Custom Search Api key not found! Please set it in a .env file.")
+#     st.stop()
+cse_id = st.secrets["CSE_ID"]
+# if not cse_id:
+#     st.error("Custom Search Engine ID not found! Please set it in a .env file.")
+#     st.stop()
 
 # Google Custom Search API setup
 API_KEY = api_key
