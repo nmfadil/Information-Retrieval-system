@@ -38,24 +38,25 @@ def clean_query(query):
 
 def fetch_answer(query):
     try:
-        # Get summary text
-        summary = wikipedia.summary(query, sentences=2)
-        
-        # # Try to fetch related image from page
-        # page = wikipedia.page(query)
-        # #image_url = page.images[0] if page.images else None
-        
-        # # Filter out unsuitable image formats
-        # valid_images = [img for img in page.images if img.lower().endswith(('.jpg', '.jpeg', '.png'))]
-        # image_url = valid_images[0] if valid_images else None
+        query = clean_query(query)
 
-        return summary#, image_url
+        # Step 1: Get best matching title
+        search_results = wikipedia.search(query)
+        if not search_results:
+            return "Sorry, no results found."
+
+        best_title = search_results[0]
+
+        # Step 2: Fetch summary of top result
+        summary = wikipedia.summary(best_title, sentences=2)
+        return summary
+
     except wikipedia.exceptions.DisambiguationError as e:
-        return f"Query is too broad. Try something more specific. Suggestions: {e.options[:3]}", None
+        return f"Too broad. Try one of these: {e.options[:3]}"
     except wikipedia.exceptions.PageError:
-        return "Sorry, I couldn't find any information on that.", None
-    except Exception as e:
-        return "Something went wrong while fetching info.\n"+str(e), None
+        return "Couldn't find a valid Wikipedia page."
+    except Exception:
+        return "An error occurred while retrieving the answer."
 
 def fetch_image(query):
     try:
