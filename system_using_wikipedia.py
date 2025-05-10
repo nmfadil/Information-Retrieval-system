@@ -103,17 +103,20 @@ else:
     spoken_text = ""
     if st.button("🎙️ Record Speech"):
         spoken_text = speech_to_text()
-        st.write("🗣️ You said:", spoken_text)
+        
     
-    if spoken_text and not spoken_text.startswith(("⏱️", "😕", "❌")):
-        query = spoken_text
-    elif spoken_text:
-        st.warning("Speech input failed. Please try again.")
-        if st.button("🔁 Try Again"):
-            spoken_text = speech_to_text()
-            st.write("🗣️ You said:", spoken_text)
-            if not spoken_text.startswith(("⏱️", "😕", "❌")):
-                query = spoken_text
+    # Allow users to refine their speech input as needed before hitting "Get Answer"
+    # if spoken_text:
+    #     if not spoken_text.startswith(("⏱️", "😕", "❌")):
+    #         query = spoken_text
+    #         st.write("🗣️ You said:", spoken_text)
+    #     else:
+    #         query = ""
+    #         st.warning(spoken_text)
+    if spoken_text:
+        query = spoken_text if not spoken_text.startswith(("⏱️", "😕", "❌")) else ""
+        (st.write("🗣️ You said:", spoken_text) if query else st.warning(spoken_text))
+
 
 # Process query and display results
 if query and st.button("Get Answer"):
