@@ -29,6 +29,7 @@ CSE_ID = cse_id
 
 
 
+
 def clean_query(query):
     # Remove phrases like "what is", "explain", etc.
     query = query.lower()
@@ -58,14 +59,20 @@ def fetch_answer(query):
     except Exception:
         return "An error occurred while retrieving the answer."
 
-def fetch_image(query):
+# After fetching results from Google Custom Search
+def fetch_images(query):
     try:
         service = build("customsearch", "v1", developerKey=API_KEY)
-        res = service.cse().list(q=query, cx=CSE_ID, searchType="image", num=1).execute()
-        image_url = res['items'][0]['link']
-        return image_url
+        res = service.cse().list(q=query, cx=CSE_ID, num=5).execute()
+
+        image_urls = []
+        for item in res.get("items", []):
+            img_url = item.get('pagemap', {}).get('cse_image', [{}])[0].get('src')
+            if img_url:
+                image_urls.append(img_url)
+        return image_urls
     except Exception:
-        return None
+        return []
     
 def text_to_speech(text):
     tts = gTTS(text=text, lang='en')
@@ -93,7 +100,11 @@ def speech_to_text():
 
 # Streamlit app
 st.title("Information Retrieval System")
-
+# In your Streamlit code
+if "img_index" not in st.session_state:
+    st.session_state.img_index = 0
+if "img_urls" not in st.session_state:
+    st.session_state.img_urls = []
 # Input options
 input_method = st.radio("Choose input method:", ("Text", "Speech"))
 query = ""
@@ -123,10 +134,9 @@ else:
 if query and st.button("Get Answer"):
     with st.spinner("Fetching answer..."):
         query = clean_query(query)
-        answer, image_url = fetch_answer(query), fetch_image(query)
+        answer, image_url = fetch_answer(query), fetch_images(query)
         
-        # Display text answer
-        st.write("Answer:", answer)
+        st.session_state.answer = answer  # ✅ store the answer
         
         # Generate and display audio with controls
         # audio_file = text_to_speech(answer)
@@ -136,10 +146,22 @@ if query and st.button("Get Answer"):
         audio_bytes = text_to_speech(answer)
         st.audio(audio_bytes, format='audio/mp3')
         
-        # Display image
-        if image_url:
-            response = requests.get(image_url, stream=True)
-            img = Image.open(io.BytesIO(response.content))
-            st.image(img, caption="Related Image")
-        else:
-            st.write("No related image found.")
+        st.session_state.img_urls = fetch_images(query)
+        st.session_state.img_index = 0
+
+# Show the stored answer (if exists)
+if "answer" in st.session_state:
+    st.write("Answer:", st.session_state.answer)
+
+# Show image and allow cycling
+if st.session_state.img_urls:
+    img_url = st.session_state.img_urls[st.session_state.img_index]
+    try:
+        response = requests.get(img_url, timeout=5)
+        img = Image.open(io.BytesIO(response.content))
+        st.image(img, caption=f"Related Image ({st.session_state.img_index + 1}/{len(st.session_state.img_urls)})")
+    except Exception:
+        st.warning("❌ Could not load the current image.")
+
+    if st.button("➡️ Next Image"):
+        st.session_state.img_index = (st.session_state.img_index + 1) % len(st.session_state.img_urls)
