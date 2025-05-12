@@ -56,8 +56,8 @@ def fetch_answer(query):
         return f"Too broad. Try one of these: {e.options[:3]}"
     except wikipedia.exceptions.PageError:
         return "Couldn't find a valid Wikipedia page."
-    except Exception:
-        return "An error occurred while retrieving the answer."
+    except Exception as e:
+        return f"An unexpected error occurred: {str(e)}"
 
 # After fetching results from Google Custom Search
 def fetch_images(query):
