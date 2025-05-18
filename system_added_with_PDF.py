@@ -198,10 +198,24 @@ if mode == "Wikipedia IR":
 # ========== PDF IR MODE ==========
 elif mode == "PDF IR":
     st.subheader("📄 PDF-Based IR (Coming Up!)")
+
     uploaded_pdf = st.file_uploader("Upload a PDF document", type=["pdf"])
-    
+
+    # Optional: manual reset
+    # if st.button("🗑️ Clear PDF Session"):
+    #     st.session_state.pop("pdf_text", None)
+    #     st.session_state.pop("pdf_filename", None)
+    #     st.success("🧹 Cleared stored PDF data. You can now upload a new file.")
+    #     st.stop()
+
     if uploaded_pdf:
         st.success("✅ PDF uploaded successfully.")
+
+        current_filename = uploaded_pdf.name
+        # Auto-reset if a new PDF is uploaded
+        if st.session_state.get("pdf_filename") != current_filename:
+            st.session_state.pop("pdf_text", None)
+            st.session_state["pdf_filename"] = current_filename
 
         # Extract and cache PDF text
         if "pdf_text" not in st.session_state:
@@ -220,6 +234,5 @@ elif mode == "PDF IR":
         else:
             st.info("📄 Text already extracted.")
             st.text_area("📖 Preview Extracted Text", st.session_state["pdf_text"][:3000], height=200)
-
     else:
         st.warning("📥 Please upload a PDF to proceed.")
