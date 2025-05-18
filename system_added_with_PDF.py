@@ -11,6 +11,7 @@ from PIL import Image
 import speech_recognition as sr
 import wikipedia
 import re
+import fitz  # PyMuPDF
 
 # from dotenv import load_dotenv
 
@@ -200,6 +201,25 @@ elif mode == "PDF IR":
     uploaded_pdf = st.file_uploader("Upload a PDF document", type=["pdf"])
     
     if uploaded_pdf:
-        st.info("✅ PDF uploaded. Query processing will be available in the next step.")
+        st.success("✅ PDF uploaded successfully.")
+
+        # Extract and cache PDF text
+        if "pdf_text" not in st.session_state:
+            with st.spinner("📄 Extracting text from PDF..."):
+                try:
+                    doc = fitz.open(stream=uploaded_pdf.read(), filetype="pdf")
+                    text = ""
+                    for page in doc:
+                        text += page.get_text()
+
+                    st.session_state["pdf_text"] = text.strip()
+                    st.success("📚 PDF text extracted.")
+                    st.text_area("📖 Preview Extracted Text", st.session_state["pdf_text"][:3000], height=200)
+                except Exception as e:
+                    st.error(f"❌ Failed to extract PDF text: {e}")
+        else:
+            st.info("📄 Text already extracted.")
+            st.text_area("📖 Preview Extracted Text", st.session_state["pdf_text"][:3000], height=200)
+
     else:
         st.warning("📥 Please upload a PDF to proceed.")
