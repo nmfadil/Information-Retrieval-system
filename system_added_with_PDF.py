@@ -109,19 +109,7 @@ def speech_to_text():
         
         
         
-# Configurable parameters
-chunk_size = 500  # characters (or switch to word-based if needed)
-chunk_overlap = 100
 
-def chunk_text(text, chunk_size=500, overlap=100):
-    chunks = []
-    start = 0
-    while start < len(text):
-        end = start + chunk_size
-        chunk = text[start:end]
-        chunks.append(chunk)
-        start += chunk_size - overlap
-    return chunks
 
 # ========== For PDF ==========
 
@@ -138,11 +126,37 @@ def get_pdf_text(pdf_file):
 def get_text_chunks(text):
     splitter = CharacterTextSplitter(
         separator="\n",
-        chunk_size=100,
-        chunk_overlap=20,
+        chunk_size=1000,
+        chunk_overlap=100,
         length_function=len
     )
     return splitter.split_text(text)
+# def get_text_chunks(text, chunk_size=1500, chunk_overlap=100):
+#     sentences = sent_tokenize(text)
+    
+#     chunks = []
+#     current_chunk = ""
+
+#     for sentence in sentences:
+#         # Accumulate sentences until reaching chunk size
+#         if len(current_chunk) + len(sentence) <= chunk_size:
+#             current_chunk += " " + sentence
+#         else:
+#             chunks.append(current_chunk.strip())
+
+#             # Add overlap if needed
+#             if chunk_overlap > 0 and len(chunks) > 0:
+#                 overlap = chunks[-1][-chunk_overlap:]
+#                 current_chunk = overlap + " " + sentence
+#             else:
+#                 current_chunk = sentence
+
+#     # Add final chunk
+#     if current_chunk:
+#         chunks.append(current_chunk.strip())
+
+#     return chunks
+
 
 
 # def get_vectorstore(chunks):
@@ -282,48 +296,63 @@ if mode == "Wikipedia IR":
 
 # ========== PDF IR MODE ==========
 elif mode == "PDF IR":
-    st.subheader("📄 PDF-Based IR (Coming Up!)")
+    st.subheader("📄 PDF-Based IR")
 
     uploaded_pdf = st.file_uploader("Upload a PDF document", type=["pdf"])
 
-    # Optional: manual reset
-    # if st.button("🗑️ Clear PDF Session"):
-    #     st.session_state.pop("pdf_text", None)
-    #     st.session_state.pop("pdf_filename", None)
-    #     st.success("🧹 Cleared stored PDF data. You can now upload a new file.")
-    #     st.stop()
-
     if uploaded_pdf:
         st.success("✅ PDF uploaded successfully.")
-
         current_filename = uploaded_pdf.name
-        # Auto-reset if a new PDF is uploaded
+
+        # Auto-reset if a new file is uploaded
         if st.session_state.get("pdf_filename") != current_filename:
-            st.session_state.pop("pdf_text", None)
+            st.session_state.clear()  # Clear everything related to the previous session
             st.session_state["pdf_filename"] = current_filename
 
-        # Extract and cache PDF text
-        if "pdf_text" not in st.session_state:
-                with st.spinner("📄 Extracting, chunking and embedding..."):
-                    try:
-                        # Extract
-                        raw_text = get_pdf_text(uploaded_pdf)
-                        st.session_state["pdf_text"] = raw_text
+        if "vectorstore" not in st.session_state:
+            with st.spinner("📄 Extracting, chunking, and embedding..."):
+                try:
+                    # Step 1: Extract
+                    raw_text = get_pdf_text(uploaded_pdf)
+                    st.session_state["pdf_text"] = raw_text
 
-                        # Chunk
-                        chunks = get_text_chunks(raw_text)
-                        st.session_state["pdf_chunks"] = chunks
+                    # Step 2: Chunk
+                    chunks = get_text_chunks(raw_text)
+                    st.session_state["pdf_chunks"] = chunks
 
-                        # Vectorstore
-                        vectorstore = get_vectorstore(chunks)
-                        st.session_state["vectorstore"] = vectorstore
+                    # Step 3: Embed & Store
+                    vectorstore = get_vectorstore(chunks)
+                    st.session_state["vectorstore"] = vectorstore
 
-                        st.success("✅ Vectorstore ready. You can now ask questions from this PDF.")
-                        st.text_area("📖 Preview Extracted Text", raw_text[:2000], height=200)
-                    except Exception as e:
-                        st.error(f"❌ Failed to extract PDF text: {e}")
+                    st.success("✅ Vectorstore ready. You can now ask questions from this PDF.")
+                    #st.text_area("📖 Preview Extracted Text", raw_text[:2000], height=200)
+                    st.subheader("🧩 Text Chunks Preview")
+                    for i, chunk in enumerate(chunks):
+                        st.markdown(f"**Chunk {i+1}:**")
+                        st.code(chunk, language="markdown")
+
+                except Exception as e:
+                    st.error(f"❌ Failed to process PDF: {e}")
         else:
-            st.info("📄 Text extracted.")
-            st.text_area("📖 Preview Extracted Text", st.session_state["pdf_text"][:3000], height=200)
+            st.info("📄 Text already extracted.")
+            #st.text_area("📖 Preview Extracted Text", st.session_state["pdf_text"][:3000], height=200)
+        # 📤 User Query
+        user_query = st.text_input("🔎 Ask a question based on this PDF")
+
+        if user_query and st.session_state.get("vectorstore"):
+            with st.spinner("🧠 Performing semantic search..."):
+                try:
+                    # Retrieve top relevant chunks
+                    relevant_docs = st.session_state["vectorstore"].similarity_search(user_query, k=3)
+
+                    # Extract and display content
+                    for i, doc in enumerate(relevant_docs, 1):
+                        st.markdown(f"**Match {i}:**")
+                        st.write(doc.page_content)
+                        st.markdown("---")
+
+                except Exception as e:
+                    st.error(f"❌ Semantic search failed: {e}")
+
     else:
         st.warning("📥 Please upload a PDF to proceed.")
