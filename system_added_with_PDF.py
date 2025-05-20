@@ -11,24 +11,30 @@ from PIL import Image
 import speech_recognition as sr
 import wikipedia
 import re
-import fitz  # PyMuPDF
+#import fitz  # PyMuPDF
+#from sentence_transformers import SentenceTransformer
+#import faiss
+#import numpy as np
+#import textwrap
+from PyPDF2 import PdfReader
+from langchain.text_splitter import CharacterTextSplitter
+#from langchain.embeddings import HuggingFaceInstructEmbeddings
+#from langchain_community.embeddings import HuggingFaceInstructEmbeddings
+from langchain_huggingface import HuggingFaceEndpointEmbeddings
+#from langchain.embeddings import HuggingFaceHub
+#from langchain.vectorstores import FAISS
+from langchain_community.vectorstores import FAISS
 
-# from dotenv import load_dotenv
-
-# # Load API key securely
-# load_dotenv()
 api_key = st.secrets["CS_API_KEY"]
-# if not api_key:
-#     st.error("Custom Search Api key not found! Please set it in a .env file.")
-#     st.stop()
-cse_id = st.secrets["CSE_ID"]
-# if not cse_id:
-#     st.error("Custom Search Engine ID not found! Please set it in a .env file.")
-#     st.stop()
 
+cse_id = st.secrets["CSE_ID"]
+
+
+hugg_token = st.secrets["HUGGINGFACEHUB_API_TOKEN"]
 # Google Custom Search API setup
 API_KEY = api_key
 CSE_ID = cse_id
+HF_TOKEN = hugg_token
 
 
 
@@ -98,6 +104,85 @@ def speech_to_text():
             return "😕 Sorry, I couldn't understand your speech."
         except sr.RequestError:
             return "❌ Speech service is unreachable. Please check your internet."
+        
+        
+        
+        
+        
+# Configurable parameters
+chunk_size = 500  # characters (or switch to word-based if needed)
+chunk_overlap = 100
+
+def chunk_text(text, chunk_size=500, overlap=100):
+    chunks = []
+    start = 0
+    while start < len(text):
+        end = start + chunk_size
+        chunk = text[start:end]
+        chunks.append(chunk)
+        start += chunk_size - overlap
+    return chunks
+
+# ========== For PDF ==========
+
+
+def get_pdf_text(pdf_file):
+    reader = PdfReader(pdf_file)
+    text = ""
+    for page in reader.pages:
+        content = page.extract_text()
+        if content:
+            text += content
+    return text
+
+def get_text_chunks(text):
+    splitter = CharacterTextSplitter(
+        separator="\n",
+        chunk_size=100,
+        chunk_overlap=20,
+        length_function=len
+    )
+    return splitter.split_text(text)
+
+
+# def get_vectorstore(chunks):
+#     # embeddings = HuggingFaceInstructEmbeddings(model_name="hkunlp/instructor-xl")
+#     # # embeddings = HuggingFaceHub(
+#     # #     repo_id="hkunlp/instructor-xl", 
+#     # #     model_kwargs={"temperature": 0.5, "max_length": 512}
+#     # # )
+#     # return FAISS.from_texts(texts=chunks, embedding=embeddings)
+#     try:
+#         embeddings = HuggingFaceInstructEmbeddings(model_name="hkunlp/instructor-xl")
+#         vectorstore = FAISS.from_texts(texts=chunks, embedding=embeddings)
+#     except TypeError as e:
+#         if "token" in str(e):
+#             st.warning("Encountered model init bug. Retrying...")
+#             # Retry without clearing cache, will likely succeed on rerun
+#             st.rerun()
+#         else:
+#             raise e
+#     return vectorstore
+def get_vectorstore(chunks):
+    try:
+        embeddings = HuggingFaceEndpointEmbeddings(
+            model="sentence-transformers/all-mpnet-base-v2",  # or any hosted model
+            task="feature-extraction",
+            huggingfacehub_api_token=HF_TOKEN  # via .env or secrets
+        )
+        vectorstore = FAISS.from_texts(texts=chunks, embedding=embeddings)
+    except Exception as e:
+        raise RuntimeError(f"❌ Failed to build vectorstore: {e}")
+    return vectorstore
+
+
+
+
+
+# ========== Main App ==========
+
+
+
 
 
 # Streamlit app
@@ -219,20 +304,26 @@ elif mode == "PDF IR":
 
         # Extract and cache PDF text
         if "pdf_text" not in st.session_state:
-            with st.spinner("📄 Extracting text from PDF..."):
-                try:
-                    doc = fitz.open(stream=uploaded_pdf.read(), filetype="pdf")
-                    text = ""
-                    for page in doc:
-                        text += page.get_text()
+                with st.spinner("📄 Extracting, chunking and embedding..."):
+                    try:
+                        # Extract
+                        raw_text = get_pdf_text(uploaded_pdf)
+                        st.session_state["pdf_text"] = raw_text
 
-                    st.session_state["pdf_text"] = text.strip()
-                    st.success("📚 PDF text extracted.")
-                    st.text_area("📖 Preview Extracted Text", st.session_state["pdf_text"][:3000], height=200)
-                except Exception as e:
-                    st.error(f"❌ Failed to extract PDF text: {e}")
+                        # Chunk
+                        chunks = get_text_chunks(raw_text)
+                        st.session_state["pdf_chunks"] = chunks
+
+                        # Vectorstore
+                        vectorstore = get_vectorstore(chunks)
+                        st.session_state["vectorstore"] = vectorstore
+
+                        st.success("✅ Vectorstore ready. You can now ask questions from this PDF.")
+                        st.text_area("📖 Preview Extracted Text", raw_text[:2000], height=200)
+                    except Exception as e:
+                        st.error(f"❌ Failed to extract PDF text: {e}")
         else:
-            st.info("📄 Text already extracted.")
+            st.info("📄 Text extracted.")
             st.text_area("📖 Preview Extracted Text", st.session_state["pdf_text"][:3000], height=200)
     else:
         st.warning("📥 Please upload a PDF to proceed.")
